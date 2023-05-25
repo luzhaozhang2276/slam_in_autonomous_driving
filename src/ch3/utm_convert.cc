@@ -28,7 +28,8 @@ bool UTM2LatLon(const UTMCoordinate& utm_coor, Vec2d& latlon) {
     return ret == 0;
 }
 
-bool ConvertGps2UTM(GNSS& gps_msg, const Vec2d& antenna_pos, const double& antenna_angle, const Vec3d& map_origin) {
+bool ConvertGps2UTM(GNSS& gps_msg, const Vec2d& antenna_pos, const double& antenna_angle, const SO3& R_eskf,
+                    const Vec3d& map_origin) {
     /// 经纬高转换为UTM
     UTMCoordinate utm_rtk;
     if (!LatLon2UTM(gps_msg.lat_lon_alt_.head<2>(), utm_rtk)) {
@@ -52,6 +53,16 @@ bool ConvertGps2UTM(GNSS& gps_msg, const Vec2d& antenna_pos, const double& anten
     double z = utm_rtk.z_ - map_origin[2];
     SE3 TWG(SO3::rotZ(heading), Vec3d(x, y, z));
     SE3 TWB = TWG * TGB;
+
+    // 使用ESKF的角度作为观测
+    /*
+    if (!gps_msg.heading_valid_) {
+        SO3 Rwg = R_eskf * SO3::rotZ(antenna_angle * math::kDEG2RAD);
+        TWB.so3() = R_eskf;
+        TWB.translation() = Rwg * TGB.translation() + TWG.translation();
+        gps_msg.heading_valid_ = true;
+    }
+    */
 
     gps_msg.utm_valid_ = true;
     gps_msg.utm_.xy_[0] = TWB.translation().x();

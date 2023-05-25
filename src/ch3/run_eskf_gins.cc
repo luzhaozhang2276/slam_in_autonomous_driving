@@ -97,14 +97,14 @@ int main(int argc, char** argv) {
 
           /// predict就会更新ESKF，所以此时就可以发送数据
           auto state = eskf.GetNominalState();
-          if(ui){
+          if (ui) {
               ui->UpdateNavState(state);
           }
 
           /// 记录数据以供绘图
           save_result(fout, state);
 
-          usleep(1e3);
+          usleep(1e1);
       })
         .SetGNSSProcessFunc([&](const sad::GNSS& gnss) {
             /// GNSS 处理函数
@@ -113,7 +113,8 @@ int main(int argc, char** argv) {
             }
 
             sad::GNSS gnss_convert = gnss;
-            if (!sad::ConvertGps2UTM(gnss_convert, antenna_pos, FLAGS_antenna_angle) || !gnss_convert.heading_valid_) {
+            if (!sad::ConvertGps2UTM(gnss_convert, antenna_pos, FLAGS_antenna_angle, eskf.GetR()) ||
+                !gnss_convert.heading_valid_) {
                 return;
             }
 

@@ -6,6 +6,7 @@
 #define SLAM_IN_AUTO_DRIVING_UTM_CONVERT_H
 
 #include "common/gnss.h"
+#include <sophus/so3.hpp>
 
 namespace sad {
 
@@ -17,7 +18,7 @@ namespace sad {
  * @param map_origin    地图原点，指定时，将从UTM位置中减掉坐标原点
  * @return
  */
-bool ConvertGps2UTM(GNSS& gnss_reading, const Vec2d& antenna_pos, const double& antenna_angle,
+bool ConvertGps2UTM(GNSS& gnss_reading, const Vec2d& antenna_pos, const double& antenna_angle, const SO3& R_eskf,
                     const Vec3d& map_origin = Vec3d::Zero());
 
 /**
