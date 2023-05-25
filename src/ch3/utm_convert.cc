@@ -55,14 +55,12 @@ bool ConvertGps2UTM(GNSS& gps_msg, const Vec2d& antenna_pos, const double& anten
     SE3 TWB = TWG * TGB;
 
     // 使用ESKF的角度作为观测
-    /*
     if (!gps_msg.heading_valid_) {
         SO3 Rwg = R_eskf * SO3::rotZ(antenna_angle * math::kDEG2RAD);
         TWB.so3() = R_eskf;
         TWB.translation() = Rwg * TGB.translation() + TWG.translation();
         gps_msg.heading_valid_ = true;
     }
-    */
 
     gps_msg.utm_valid_ = true;
     gps_msg.utm_.xy_[0] = TWB.translation().x();
