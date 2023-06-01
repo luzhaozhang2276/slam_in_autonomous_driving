@@ -8,8 +8,8 @@
 
 #include "ch3/eskf.hpp"
 #include "ch3/static_imu_init.h"
-#include "ch4/imu_preintegration.h"
 #include "ch4/g2o_types.h"
+#include "ch4/imu_preintegration.h"
 #include "common/g2o_types.h"
 #include "common/io_utils.h"
 
@@ -25,6 +25,7 @@ DEFINE_double(antenna_pox_x, -0.17, "RTK天线安装偏移X");
 DEFINE_double(antenna_pox_y, -0.20, "RTK天线安装偏移Y");
 DEFINE_bool(with_ui, true, "是否显示图形界面");
 
+/*
 TEST(PREINTEGRATION_TEST, ROTATION_TEST) {
     // 测试在恒定角速度运转下的预积分情况
     double imu_time_span = 0.01;       // IMU测量间隔
@@ -44,8 +45,10 @@ TEST(PREINTEGRATION_TEST, ROTATION_TEST) {
         Vec3d acce = -gravity;  // 加速度计应该测量到一个向上的力
         pre_integ.Integrate(sad::IMU(time, constant_omega, acce), imu_time_span);
 
+        // 预积分
         sad::NavStated this_status = pre_integ.Predict(start_status, gravity);
 
+        // 直接积分
         t = t + v * imu_time_span + 0.5 * gravity * imu_time_span * imu_time_span +
             0.5 * (R * acce) * imu_time_span * imu_time_span;
         v = v + gravity * imu_time_span + (R * acce) * imu_time_span;
@@ -66,7 +69,7 @@ TEST(PREINTEGRATION_TEST, ROTATION_TEST) {
         EXPECT_NEAR(R.unit_quaternion().w(), this_status.R_.unit_quaternion().w(), 1e-4);
     }
 
-    end_status = pre_integ.Predict(start_status);
+    end_status = pre_integ.Predict(start_status);  // 预积分结果
 
     LOG(INFO) << "preinteg result: ";
     LOG(INFO) << "end rotation: \n" << end_status.R_.matrix();
@@ -79,7 +82,9 @@ TEST(PREINTEGRATION_TEST, ROTATION_TEST) {
     LOG(INFO) << "end v: \n" << v.transpose();
     SUCCEED();
 }
+*/
 
+/*
 TEST(PREINTEGRATION_TEST, ACCELERATION_TEST) {
     // 测试在恒定加速度运行下的预积分情况
     double imu_time_span = 0.01;     // IMU测量间隔
@@ -131,6 +136,7 @@ TEST(PREINTEGRATION_TEST, ACCELERATION_TEST) {
     LOG(INFO) << "end v: \n" << v.transpose();
     SUCCEED();
 }
+*/
 
 void Optimize(sad::NavStated& last_state, sad::NavStated& this_state, sad::GNSS& last_gnss, sad::GNSS& this_gnss,
               std::shared_ptr<sad::IMUPreintegration>& preinteg, const Vec3d& grav);

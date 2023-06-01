@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
           save_result(fout, state);
           if (ui) {
               ui->UpdateNavState(state);
-              usleep(5e2);
+              usleep(1e2);
           }
       })
         .SetGNSSProcessFunc([&](const sad::GNSS& gnss) {
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
             save_result(fout, state);
             if (ui) {
                 ui->UpdateNavState(state);
-                usleep(1e3);
+                usleep(1e1);
             }
             gnss_inited = true;
         })

@@ -91,6 +91,10 @@ void GinsPreInteg::AddGnss(const GNSS& gnss) {
 void GinsPreInteg::AddOdom(const sad::Odom& odom) {
     last_odom_ = odom;
     last_odom_set_ = true;
+
+    // todo: 参与直接优化，即调用Optimize()，解决无rtk观测时导致的轨迹发散问题
+    // (即当rtk失效时，由odom触发优化函数，但因子图中去掉rtk的失效的边 一条失效or两条都失效)
+    if (!first_gnss_received_) return;
 }
 
 void GinsPreInteg::Optimize() {
