@@ -77,7 +77,7 @@ class GinsPreInteg {
      * 轮速计处理函数
      * @param odom
      */
-    void AddOdom(const Odom& odom);
+    void AddOdom(const Odom& odom, bool gnss_valid = true);
 
     /// 设置gins的各种配置项，可以在构建时调用，也可以构造完成后，静止初始化结束时调用
     void SetOptions(Options options);

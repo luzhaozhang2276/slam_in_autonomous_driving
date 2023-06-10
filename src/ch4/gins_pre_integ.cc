@@ -17,7 +17,11 @@ namespace sad {
 
 void GinsPreInteg::AddImu(const IMU& imu) {
     if (first_gnss_received_ && first_imu_received_) {
-        pre_integ_->Integrate(imu, imu.timestamp_ - last_imu_.timestamp_);
+        if (pre_integ_->dt_ < 1e-6) {
+            pre_integ_->Integrate(imu, imu.timestamp_ - this_frame_->timestamp_);
+        } else {
+            pre_integ_->Integrate(imu, imu.timestamp_ - last_imu_.timestamp_);
+        }
     }
 
     first_imu_received_ = true;
@@ -88,13 +92,20 @@ void GinsPreInteg::AddGnss(const GNSS& gnss) {
     last_gnss_ = this_gnss_;
 }
 
-void GinsPreInteg::AddOdom(const sad::Odom& odom) {
+void GinsPreInteg::AddOdom(const sad::Odom& odom, bool gnss_valid) {
     last_odom_ = odom;
     last_odom_set_ = true;
 
-    // todo: 参与直接优化，即调用Optimize()，解决无rtk观测时导致的轨迹发散问题
-    // (即当rtk失效时，由odom触发优化函数，但因子图中去掉rtk的失效的边 一条失效or两条都失效)
-    if (!first_gnss_received_) return;
+    if (!first_gnss_received_) return;  // gnss未初始化
+    if (gnss_valid) return;             // gnss有效时，不调用odom优化
+
+    // 当gnss失效时，由odom触发优化函数，注意在因子图优化中去掉rtk失效的边
+    this_frame_ = std::make_shared<NavStated>(current_time_);
+    pre_integ_->Integrate(last_imu_, odom.timestamp_ - current_time_);  // 积分到odom时刻
+    current_time_ = odom.timestamp_;
+    *this_frame_ = pre_integ_->Predict(*last_frame_, options_.gravity_);
+    Optimize();
+    last_frame_ = this_frame_;
 }
 
 void GinsPreInteg::Optimize() {
@@ -190,11 +201,15 @@ void GinsPreInteg::Optimize() {
     // GNSS边
     auto edge_gnss0 = new EdgeGNSS(v0_pose, last_gnss_.utm_pose_);
     edge_gnss0->setInformation(options_.gnss_info_);
-    optimizer.addEdge(edge_gnss0);
+    if (std::abs(last_gnss_.unix_time_ - last_frame_->timestamp_) < 1e-6) {
+        optimizer.addEdge(edge_gnss0);
+    }
 
     auto edge_gnss1 = new EdgeGNSS(v1_pose, this_gnss_.utm_pose_);
     edge_gnss1->setInformation(options_.gnss_info_);
-    optimizer.addEdge(edge_gnss1);
+    if (std::abs(this_gnss_.unix_time_ - this_frame_->timestamp_) < 1e-6) {
+        optimizer.addEdge(edge_gnss1);
+    }
 
     // Odom边
     EdgeEncoder3D* edge_odom = nullptr;

@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     };
 
     std::ofstream fout("./data/ch4/gins_preintg.txt");
-    bool imu_inited = false, gnss_inited = false;
+    bool imu_inited = false, gnss_inited = false, gnss_valid = false;
 
     sad::GinsPreInteg::Options gins_options;
     gins_options.verbose_ = FLAGS_debug;
@@ -113,6 +113,7 @@ int main(int argc, char** argv) {
 
             sad::GNSS gnss_convert = gnss;
             if (!sad::ConvertGps2UTM(gnss_convert, antenna_pos, FLAGS_antenna_angle) || !gnss_convert.heading_valid_) {
+                gnss_valid = false;
                 return;
             }
 
@@ -132,12 +133,13 @@ int main(int argc, char** argv) {
                 usleep(1e1);
             }
             gnss_inited = true;
+            gnss_valid = true;
         })
         .SetOdomProcessFunc([&](const sad::Odom& odom) {
             imu_init.AddOdom(odom);
 
             if (imu_inited && gnss_inited) {
-                gins.AddOdom(odom);
+                gins.AddOdom(odom, gnss_valid);
             }
         })
         .Go();
