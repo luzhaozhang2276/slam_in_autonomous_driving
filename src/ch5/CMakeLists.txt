@@ -25,8 +25,10 @@ add_library(${PROJECT_NAME}.ch5
         bfnn.cc
         kdtree.cc
         octo_tree.cc
+        ikd_Tree.cpp
         )
 target_link_libraries(${PROJECT_NAME}.ch5
+        ${PCL_LIBRARIES}
         tbb
         )
 

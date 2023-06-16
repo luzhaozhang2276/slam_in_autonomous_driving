@@ -32,7 +32,8 @@ class GridNN {
         NEARBY8,  // 上下左右+四角
 
         // for 3D
-        NEARBY6,  // 上下左右前后
+        NEARBY6,   // 上下左右前后
+        NEARBY14,  // 上下左右前后+上下四角
     };
 
     /**
@@ -48,7 +49,8 @@ class GridNN {
         if (dim == 2 && nearby_type_ == NearbyType::NEARBY6) {
             LOG(INFO) << "2D grid does not support nearby6, using nearby4 instead.";
             nearby_type_ = NearbyType::NEARBY4;
-        } else if (dim == 3 && (nearby_type_ != NearbyType::NEARBY6 && nearby_type_ != NearbyType::CENTER)) {
+        } else if (dim == 3 && (nearby_type_ != NearbyType::NEARBY6 && nearby_type_ != NearbyType::CENTER &&
+                                nearby_type_ != NearbyType::NEARBY14)) {
             LOG(INFO) << "3D grid does not support nearby4/8, using nearby6 instead.";
             nearby_type_ = NearbyType::NEARBY6;
         }
@@ -91,11 +93,12 @@ bool GridNN<dim>::SetPointCloud(CloudPtr cloud) {
 
     std::for_each(index.begin(), index.end(), [&cloud, this](const size_t& idx) {
         auto pt = cloud->points[idx];
+        // 将点云划分到体素中, 用hash保存
         auto key = Pos2Grid(ToEigen<float, dim>(pt));
         if (grids_.find(key) == grids_.end()) {
-            grids_.insert({key, {idx}});
+            grids_.insert({key, {idx}});// 未找到key
         } else {
-            grids_[key].emplace_back(idx);
+            grids_[key].emplace_back(idx);// 找到key
         }
     });
 
@@ -130,6 +133,12 @@ void GridNN<3>::GenerateNearbyGrids() {
     } else if (nearby_type_ == NearbyType::NEARBY6) {
         nearby_grids_ = {KeyType(0, 0, 0),  KeyType(-1, 0, 0), KeyType(1, 0, 0), KeyType(0, 1, 0),
                          KeyType(0, -1, 0), KeyType(0, 0, -1), KeyType(0, 0, 1)};
+    } else if (nearby_type_ == NearbyType::NEARBY14) {
+        nearby_grids_ = {KeyType(0, 0, 0), KeyType(-1, 0, 0), KeyType(1, 0, 0), KeyType(0, 1, 0), KeyType(0, -1, 0),
+                         KeyType(0, 0, -1), KeyType(0, 0, 1),
+                         // 新增上下各四角
+                         KeyType(-1, -1, 1), KeyType(1, -1, 1), KeyType(-1, 1, 1), KeyType(1, 1, 1),
+                         KeyType(-1, -1, -1), KeyType(1, -1, -1), KeyType(-1, 1, -1), KeyType(1, 1, -1)};
     }
 }
 
@@ -139,6 +148,7 @@ bool GridNN<dim>::GetClosestPoint(const PointType& pt, PointType& closest_pt, si
     std::vector<size_t> idx_to_check;
     auto key = Pos2Grid(ToEigen<float, dim>(pt));
 
+    // 在当前key的nearby grid中搜索,将待搜索点云统一放到 idx_to_check 中
     std::for_each(nearby_grids_.begin(), nearby_grids_.end(), [&key, &idx_to_check, this](const KeyType& delta) {
         auto dkey = key + delta;
         auto iter = grids_.find(dkey);
@@ -158,7 +168,7 @@ bool GridNN<dim>::GetClosestPoint(const PointType& pt, PointType& closest_pt, si
         nearby_cloud->points.template emplace_back(cloud_->points[idx]);
         nearby_idx.emplace_back(idx);
     }
-
+    // 暴力搜索
     size_t closest_point_idx = bfnn_point(nearby_cloud, ToVec3f(pt));
     idx = nearby_idx.at(closest_point_idx);
     closest_pt = cloud_->points[idx];
@@ -167,8 +177,8 @@ bool GridNN<dim>::GetClosestPoint(const PointType& pt, PointType& closest_pt, si
 }
 
 template <int dim>
-bool GridNN<dim>::GetClosestPointForCloud(CloudPtr ref, CloudPtr query,
-                                          std::vector<std::pair<size_t, size_t>>& matches) {
+bool GridNN<dim>::GetClosestPointForCloud(CloudPtr ref, CloudPtr query,// 没用上ref, ref在SetPointCloud中添加到了栅格中
+                                          std::vector<std::pair<size_t, size_t>>& matches) {// 待搜索点云索引, 当前点云索引
     matches.clear();
     std::vector<size_t> index(query->size());
     std::for_each(index.begin(), index.end(), [idx = 0](size_t& i) mutable { i = idx++; });

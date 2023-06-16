@@ -140,7 +140,7 @@ bool KdTree::NeedExpand(const Vec3f &pt, KdTreeNode *node, std::priority_queue<N
         return true;
     }
 
-    if (approximate_) {
+    if (approximate_) {// 近似knn
         float d = pt[node->axis_index_] - node->split_thresh_;
         if ((d * d) < knn_result.top().distance2_ * alpha_) {
             return true;

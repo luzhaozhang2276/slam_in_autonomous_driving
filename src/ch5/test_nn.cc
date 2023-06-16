@@ -16,6 +16,9 @@
 #include "common/point_types.h"
 #include "common/sys_utils.h"
 
+#include "nanoflann/nanoflann.hpp"
+#include "ch5/ikd_Tree.h"
+
 DEFINE_string(first_scan_path, "./data/ch5/first.pcd", "第一个点云路径");
 DEFINE_string(second_scan_path, "./data/ch5/second.pcd", "第二个点云路径");
 DEFINE_double(ANN_alpha, 1.0, "AAN的比例因子");
@@ -112,68 +115,82 @@ TEST(CH5_TEST, GRID_NN) {
     sad::bfnn_cloud(first, second, truth_matches);
 
     // 对比不同种类的grid
-    sad::GridNN<2> grid0(0.1, sad::GridNN<2>::NearbyType::CENTER), grid4(0.1, sad::GridNN<2>::NearbyType::NEARBY4),
-        grid8(0.1, sad::GridNN<2>::NearbyType::NEARBY8);
-    sad::GridNN<3> grid3(0.1, sad::GridNN<3>::NearbyType::NEARBY6);
+    // sad::GridNN<2> grid0(0.1, sad::GridNN<2>::NearbyType::CENTER), grid4(0.1, sad::GridNN<2>::NearbyType::NEARBY4),
+    //     grid8(0.1, sad::GridNN<2>::NearbyType::NEARBY8);
+    sad::GridNN<3> grid3(0.1, sad::GridNN<3>::NearbyType::NEARBY6), grid14(0.1, sad::GridNN<3>::NearbyType::NEARBY14);
 
-    grid0.SetPointCloud(first);
-    grid4.SetPointCloud(first);
-    grid8.SetPointCloud(first);
+    // grid0.SetPointCloud(first);
+    // grid4.SetPointCloud(first);
+    // grid8.SetPointCloud(first);
     grid3.SetPointCloud(first);
+    grid14.SetPointCloud(first);
 
     // 评价各种版本的Grid NN
     // sorry没有C17的template lambda... 下面必须写的啰嗦一些
-    LOG(INFO) << "===================";
+    // LOG(INFO) << "===================";
     std::vector<std::pair<size_t, size_t>> matches;
-    sad::evaluate_and_call(
-        [&first, &second, &grid0, &matches]() { grid0.GetClosestPointForCloud(first, second, matches); },
-        "Grid0 单线程", 10);
-    EvaluateMatches(truth_matches, matches);
+    // sad::evaluate_and_call(
+    //     [&first, &second, &grid0, &matches]() { grid0.GetClosestPointForCloud(first, second, matches); },
+    //     "Grid0 单线程", 10);
+    // EvaluateMatches(truth_matches, matches);
 
-    LOG(INFO) << "===================";
-    sad::evaluate_and_call(
-        [&first, &second, &grid0, &matches]() { grid0.GetClosestPointForCloudMT(first, second, matches); },
-        "Grid0 多线程", 10);
-    EvaluateMatches(truth_matches, matches);
+    // LOG(INFO) << "===================";
+    // sad::evaluate_and_call(
+    //     [&first, &second, &grid0, &matches]() { grid0.GetClosestPointForCloudMT(first, second, matches); },
+    //     "Grid0 多线程", 10);
+    // EvaluateMatches(truth_matches, matches);
 
-    LOG(INFO) << "===================";
-    sad::evaluate_and_call(
-        [&first, &second, &grid4, &matches]() { grid4.GetClosestPointForCloud(first, second, matches); },
-        "Grid4 单线程", 10);
-    EvaluateMatches(truth_matches, matches);
+    // LOG(INFO) << "===================";
+    // sad::evaluate_and_call(
+    //     [&first, &second, &grid4, &matches]() { grid4.GetClosestPointForCloud(first, second, matches); },
+    //     "Grid4 单线程", 10);
+    // EvaluateMatches(truth_matches, matches);
 
-    LOG(INFO) << "===================";
-    sad::evaluate_and_call(
-        [&first, &second, &grid4, &matches]() { grid4.GetClosestPointForCloudMT(first, second, matches); },
-        "Grid4 多线程", 10);
-    EvaluateMatches(truth_matches, matches);
+    // LOG(INFO) << "===================";
+    // sad::evaluate_and_call(
+    //     [&first, &second, &grid4, &matches]() { grid4.GetClosestPointForCloudMT(first, second, matches); },
+    //     "Grid4 多线程", 10);
+    // EvaluateMatches(truth_matches, matches);
 
-    LOG(INFO) << "===================";
-    sad::evaluate_and_call(
-        [&first, &second, &grid8, &matches]() { grid8.GetClosestPointForCloud(first, second, matches); },
-        "Grid8 单线程", 10);
-    EvaluateMatches(truth_matches, matches);
+    // LOG(INFO) << "===================";
+    // sad::evaluate_and_call(
+    //     [&first, &second, &grid8, &matches]() { grid8.GetClosestPointForCloud(first, second, matches); },
+    //     "Grid8 单线程", 10);
+    // EvaluateMatches(truth_matches, matches);
 
-    LOG(INFO) << "===================";
-    sad::evaluate_and_call(
-        [&first, &second, &grid8, &matches]() { grid8.GetClosestPointForCloudMT(first, second, matches); },
-        "Grid8 多线程", 10);
-    EvaluateMatches(truth_matches, matches);
+    // LOG(INFO) << "===================";
+    // sad::evaluate_and_call(
+    //     [&first, &second, &grid8, &matches]() { grid8.GetClosestPointForCloudMT(first, second, matches); },
+    //     "Grid8 多线程", 10);
+    // EvaluateMatches(truth_matches, matches);
 
     LOG(INFO) << "===================";
     sad::evaluate_and_call(
         [&first, &second, &grid3, &matches]() { grid3.GetClosestPointForCloud(first, second, matches); },
-        "Grid 3D 单线程", 10);
+        "Grid6 3D 单线程", 10);
     EvaluateMatches(truth_matches, matches);
 
     LOG(INFO) << "===================";
     sad::evaluate_and_call(
         [&first, &second, &grid3, &matches]() { grid3.GetClosestPointForCloudMT(first, second, matches); },
-        "Grid 3D 多线程", 10);
+        "Grid6 3D 多线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid14, &matches]() { grid14.GetClosestPointForCloud(first, second, matches); },
+        "Grid14 3D 单线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid14, &matches]() { grid14.GetClosestPointForCloudMT(first, second, matches); },
+        "Grid14 3D 多线程", 10);
     EvaluateMatches(truth_matches, matches);
 
     SUCCEED();
 }
+
 
 TEST(CH5_TEST, KDTREE_BASICS) {
     sad::CloudPtr cloud(new sad::PointCloudType);
@@ -337,6 +354,79 @@ TEST(CH5_TEST, OCTREE_KNN) {
     SUCCEED();
 }
 
+TEST(CH5_TEST, NANO_FLANN) {
+    sad::CloudPtr first(new sad::PointCloudType), second(new sad::PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_first_scan_path, *first);
+    pcl::io::loadPCDFile(FLAGS_second_scan_path, *second);
+
+    if (first->empty() || second->empty()) {
+        LOG(ERROR) << "cannot load cloud";
+        FAIL();
+    }
+
+    // voxel grid 至 0.05
+    sad::VoxelGrid(first);
+    sad::VoxelGrid(second);
+
+    nanoflann::KdTreeFLANN<sad::PointType> kdtree;
+    sad::evaluate_and_call([&first, &kdtree]() { kdtree.setInputCloud(first); }, "nano flann Tree build", 1);
+
+    kdtree.setEpsilon(FLAGS_ANN_alpha - 1.0);
+
+    // 比较 bfnn
+    std::vector<std::pair<size_t, size_t>> true_matches;
+    sad::bfnn_cloud_mt_k(first, second, true_matches);
+
+    // 对第2个点云执行knn
+    std::vector<std::pair<size_t, size_t>> matches;
+    sad::evaluate_and_call([&first, &second, &kdtree, &matches]() { kdtree.GetClosestPointMT(second, matches, 5); },
+                           "nano flann 5NN 多线程", 1);
+    EvaluateMatches(true_matches, matches);
+
+    LOG(INFO) << "done.";
+
+    SUCCEED();
+}
+
+TEST(CH5_TEST, IKD_TREE) {
+    sad::CloudPtr first(new sad::PointCloudType), second(new sad::PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_first_scan_path, *first);
+    pcl::io::loadPCDFile(FLAGS_second_scan_path, *second);
+
+    if (first->empty() || second->empty()) {
+        LOG(ERROR) << "cannot load cloud";
+        FAIL();
+    }
+
+    // voxel grid 至 0.05
+    sad::VoxelGrid(first);
+    sad::VoxelGrid(second);
+
+    // 由于ikdtree调用不返回索引这里将强度值赋为索引
+    for (size_t i = 0; i < first->points.size(); ++i) {
+        first->points[i].intensity = i;
+    }
+    for (size_t i = 0; i < second->points.size(); ++i) {
+        second->points[i].intensity = i;
+    }
+
+    KD_TREE<sad::PointType>::Ptr ikdtree_ptr(new KD_TREE<sad::PointType>());
+    sad::evaluate_and_call([&first, &ikdtree_ptr]() { ikdtree_ptr->Build(first->points); }, "iKd Tree build", 1);
+
+    // 比较 bfnn
+    std::vector<std::pair<size_t, size_t>> true_matches;
+    sad::bfnn_cloud_mt_k(first, second, true_matches);
+
+    // 对第2个点云执行knn
+    std::vector<std::pair<size_t, size_t>> matches;
+    sad::evaluate_and_call([&first, &second, &ikdtree_ptr, &matches]() { ikdtree_ptr->GetClosestPointMT(second->points, matches, 5); },
+                           "ikd tree 5NN 多线程", 1);
+    EvaluateMatches(true_matches, matches);
+    LOG(INFO) << "done.";
+
+    SUCCEED();
+}
+
 int main(int argc, char** argv) {
     google::InitGoogleLogging(argv[0]);
     FLAGS_stderrthreshold = google::INFO;
@@ -344,5 +434,6 @@ int main(int argc, char** argv) {
 
     testing::InitGoogleTest(&argc, argv);
     google::ParseCommandLineFlags(&argc, &argv, true);
+
     return RUN_ALL_TESTS();
 }
