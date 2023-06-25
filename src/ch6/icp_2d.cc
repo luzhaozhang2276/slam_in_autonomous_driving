@@ -8,6 +8,12 @@
 #include <glog/logging.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/search/impl/kdtree.hpp>
+#include <g2o/core/block_solver.h>
+#include <g2o/core/robust_kernel.h>
+#include <g2o/core/robust_kernel_impl.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/solvers/cholmod/linear_solver_cholmod.h>
+
 
 namespace sad {
 
@@ -162,7 +168,7 @@ bool Icp2d::AlignGaussNewtonPoint2Plane(SE2& init_pose) {
             break;
         }
 
-        LOG(INFO) << "iter " << iter << " cost = " << cost << ", effect num: " << effective_num;
+//        LOG(INFO) << "iter " << iter << " cost = " << cost << ", effect num: " << effective_num;
 
         current_pose.translation() += dx.head<2>();
         current_pose.so2() = current_pose.so2() * SO2::exp(dx[2]);
@@ -199,6 +205,132 @@ void Icp2d::BuildTargetKdTree() {
     target_cloud_->width = target_cloud_->points.size();
     target_cloud_->is_dense = false;
     kdtree_.setInputCloud(target_cloud_);
+}
+
+bool Icp2d::AlignG2OPoint2Point(SE2& init_pose){
+    int iterations = 10;
+
+    using BlockSolverType = g2o::BlockSolverX;
+    using LinearSolverType = g2o::LinearSolverCholmod<BlockSolverType::PoseMatrixType>;
+    auto* solver = new g2o::OptimizationAlgorithmLevenberg(
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+    g2o::SparseOptimizer optimizer;
+    optimizer.setAlgorithm(solver);
+    optimizer.setVerbose(false);
+
+    SE2 current_pose = init_pose;
+
+    for (int iter = 0; iter < iterations; ++iter) {
+        auto* v0 = new VertexSE2();
+        v0->setId(0);
+        v0->setEstimate(current_pose);
+        optimizer.addVertex(v0);
+
+        for (size_t i = 0; i < source_scan_->ranges.size(); ++i) {
+            float r = source_scan_->ranges[i];
+            if (r < source_scan_->range_min || r > source_scan_->range_max) {
+                continue;
+            }
+
+            float angle = source_scan_->angle_min + i * source_scan_->angle_increment;
+            float theta = current_pose.so2().log();
+            Vec2d pw = current_pose * Vec2d(r * std::cos(angle), r * std::sin(angle));
+            Point2d pt;
+            pt.x = pw.x();
+            pt.y = pw.y();
+            std::vector<int> nn_idx;
+            std::vector<float> dis;
+            kdtree_.nearestKSearch(pt, 1, nn_idx, dis);
+
+            if (nn_idx.size() > 0 && dis[0] < 0.01) {
+                auto e = new EdgeSE2Point2Point(angle, r);
+                e->setVertex(0, v0);
+                Vec2d m_pt(target_cloud_->points[nn_idx[0]].x, target_cloud_->points[nn_idx[0]].y);
+                e->setMeasurement(m_pt);
+                e->setInformation(Eigen::Matrix2d::Identity());
+                optimizer.addEdge(e);
+            }
+        }
+
+        optimizer.initializeOptimization();
+        optimizer.optimize(1);
+        current_pose = v0->estimate();
+
+        optimizer.clear();
+        optimizer.clearParameters();
+    }
+
+    init_pose = current_pose;
+    LOG(INFO) << "estimated pose: " << init_pose.translation().transpose()
+              << ", theta: " << init_pose.so2().log();
+    return true;
+}
+
+bool Icp2d::AlignG2OPoint2Plane(SE2& init_pose){
+    int iterations = 1;
+    double max_dis = 0.3;
+
+    using BlockSolverType = g2o::BlockSolverX;
+    using LinearSolverType = g2o::LinearSolverCholmod<BlockSolverType::PoseMatrixType>;
+    auto* solver = new g2o::OptimizationAlgorithmLevenberg(
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+    g2o::SparseOptimizer optimizer;
+    optimizer.setAlgorithm(solver);
+    optimizer.setVerbose(false);
+
+    SE2 current_pose = init_pose;
+
+    for (int iter = 0; iter < iterations; ++iter) {
+        auto* v0 = new VertexSE2();
+        v0->setId(0);
+        v0->setEstimate(current_pose);
+        optimizer.addVertex(v0);
+
+        for (size_t i = 0; i < source_scan_->ranges.size(); ++i) {
+            float r = source_scan_->ranges[i];
+            if (r < source_scan_->range_min || r > source_scan_->range_max) {
+                continue;
+            }
+
+            float angle = source_scan_->angle_min + i * source_scan_->angle_increment;
+            Vec2d pw = current_pose * Vec2d(r * std::cos(angle), r * std::sin(angle));
+            Point2d pt;
+            pt.x = pw.x();
+            pt.y = pw.y();
+            std::vector<int> nn_idx;
+            std::vector<float> dis;
+            kdtree_.nearestKSearch(pt, 5, nn_idx, dis);
+            std::vector<Vec2d> effective_pts;  // 有效点
+            for (int j = 0; j < nn_idx.size(); ++j) {
+                if (dis[j] < max_dis) {
+                    effective_pts.emplace_back(
+                        Vec2d(target_cloud_->points[nn_idx[j]].x, target_cloud_->points[nn_idx[j]].y));
+                }
+            }
+            if (effective_pts.size() < 3) {
+                continue;
+            }
+            Vec3d line_coeffs;
+            if (math::FitLine2D(effective_pts, line_coeffs)) {
+                auto e = new EdgeSE2Point2Plane(line_coeffs, angle, r);
+                e->setVertex(0, v0);
+                e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+                optimizer.addEdge(e);
+            }
+        }
+
+        optimizer.initializeOptimization();
+        optimizer.optimize(10);
+        current_pose = v0->estimate();
+
+        optimizer.clear();
+        optimizer.clearParameters();
+    }
+
+    init_pose = current_pose;
+    LOG(INFO) << "estimated pose: " << init_pose.translation().transpose()
+              << ", theta: " << init_pose.so2().log();
+    return true;
 }
 
 }  // namespace sad

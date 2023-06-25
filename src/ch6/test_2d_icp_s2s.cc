@@ -43,6 +43,12 @@ int main(int argc, char** argv) {
                                  icp.AlignGaussNewton(pose);
                              } else if (fLS::FLAGS_method == "point2plane") {
                                  icp.AlignGaussNewtonPoint2Plane(pose);
+                             } else if (fLS::FLAGS_method == "point2point_g2o") {
+                                 icp.AlignG2OPoint2Point(pose);
+                             } else if (fLS::FLAGS_method == "point2plane_g2o") {
+                                 icp.AlignG2OPoint2Plane(pose);
+                             } else {
+                                 LOG(ERROR) << "wrong method!";
                              }
 
                              cv::Mat image;

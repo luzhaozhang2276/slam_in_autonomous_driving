@@ -11,6 +11,8 @@
 
 #include <glog/logging.h>
 #include <opencv2/core.hpp>
+#include <utility>
+#include <pcl/search/kdtree.h>
 
 #include "common/eigen_types.h"
 #include "common/math_utils.h"
@@ -103,6 +105,65 @@ class EdgeSE2LikelihoodFiled : public g2o::BaseUnaryEdge<1, double, VertexSE2> {
     double angle_ = 0;
     float resolution_ = 10.0;
     inline static const int image_boarder_ = 10;
+};
+
+class EdgeSE2Point2Point : public g2o::BaseUnaryEdge<2, Vec2d, VertexSE2>{
+   public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    explicit EdgeSE2Point2Point(double angle, float r) :_r(r), _angle(angle) {}
+
+    void computeError() override {
+        auto* v = (VertexSE2*)_vertices[0];
+        SE2 pose = v->estimate();
+        Vec2d pw = pose * Vec2d(_r * std::cos(_angle), _r * std::sin(_angle));
+//        Vec2d m_pt(_target_cloud->points[_nn_idx[0]].x, _target_cloud->points[_nn_idx[0]].y);
+//        setMeasurement(m_pt);
+
+        _error =  pw - _measurement;
+    }
+
+    void linearizeOplus() override {
+        auto* v = (VertexSE2*)_vertices[0];
+        double theta = v->estimate().so2().log();
+        _jacobianOplusXi << 1, 0, 0, 1, -_r * std::sin(_angle + theta), _r * std::cos(_angle + theta);
+    }
+
+    bool read(std::istream& is) override { return true; }
+    bool write(std::ostream& os) const override { return true; }
+
+   protected:
+    double _angle;
+    float _r;
+};
+
+class EdgeSE2Point2Plane : public g2o::BaseUnaryEdge<1, double, VertexSE2>{
+   public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    explicit EdgeSE2Point2Plane(const Vec3d line_coeffs, double angle, float r)
+        :_r(r), _angle(angle), _line_coeffs(line_coeffs) {}
+
+    void computeError() override {
+        auto* v = (VertexSE2*)_vertices[0];
+        SE2 pose = v->estimate();
+        Vec2d pw = pose * Vec2d(_r * std::cos(_angle), _r * std::sin(_angle));
+
+        _error[0] =  _line_coeffs[0] * pw[0] + _line_coeffs[1] * pw[1] + _line_coeffs[2];
+    }
+
+    void linearizeOplus() override {
+        auto* v = (VertexSE2*)_vertices[0];
+        double theta = v->estimate().so2().log();
+        _jacobianOplusXi << _line_coeffs[0], _line_coeffs[1],
+            -_line_coeffs[0] * _r * std::sin(_angle + theta) + _line_coeffs[1] * _r * std::cos(_angle + theta);
+    }
+
+    bool read(std::istream& is) override { return true; }
+    bool write(std::ostream& os) const override { return true; }
+
+   protected:
+    double _angle;
+    float _r;
+    Vec3d _line_coeffs;
 };
 
 /**
