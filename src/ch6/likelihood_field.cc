@@ -16,8 +16,11 @@
 #include <g2o/solvers/cholmod/linear_solver_cholmod.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 
+#include "common/math_utils.h"
+
 namespace sad {
 
+// 构建似然场
 void LikelihoodField::SetTargetScan(Scan2d::Ptr scan) {
     target_ = scan;
 
@@ -28,8 +31,9 @@ void LikelihoodField::SetTargetScan(Scan2d::Ptr scan) {
         if (scan->ranges[i] < scan->range_min || scan->ranges[i] > scan->range_max) {
             continue;
         }
-
+        // angle_min: 开始扫描的角度, angle_increment: 每一次扫描增加的角度
         double real_angle = scan->angle_min + i * scan->angle_increment;
+        // 获得图像系下坐标
         double x = scan->ranges[i] * std::cos(real_angle) * resolution_ + 500;
         double y = scan->ranges[i] * std::sin(real_angle) * resolution_ + 500;
 
@@ -39,12 +43,13 @@ void LikelihoodField::SetTargetScan(Scan2d::Ptr scan) {
             int yy = int(y + model_pt.dy_);
             if (xx >= 0 && xx < field_.cols && yy >= 0 && yy < field_.rows &&
                 field_.at<float>(yy, xx) > model_pt.residual_) {
-                field_.at<float>(yy, xx) = model_pt.residual_;
+                field_.at<float>(yy, xx) = model_pt.residual_;  // 像素中保存最小距离
             }
         }
     }
 }
 
+// 构造函数中会调用:生成似然场中单个像素的距离模板
 void LikelihoodField::BuildModel() {
     const int range = 20;  // 生成多少个像素的模板
     for (int x = -range; x <= range; ++x) {
@@ -79,7 +84,8 @@ bool LikelihoodField::AlignGaussNewton(SE2& init_pose) {
             }
 
             float angle = source_->angle_min + i * source_->angle_increment;
-            if (angle < source_->angle_min + 30 * M_PI / 180.0 || angle > source_->angle_max - 30 * M_PI / 180.0) {
+            if (angle < source_->angle_min + 30 * M_PI / 180.0 ||
+                angle > source_->angle_max - 30 * M_PI / 180.0) {
                 continue;
             }
 
@@ -87,22 +93,34 @@ bool LikelihoodField::AlignGaussNewton(SE2& init_pose) {
             Vec2d pw = current_pose * Vec2d(r * std::cos(angle), r * std::sin(angle));
 
             // 在field中的图像坐标
-            Vec2i pf = (pw * resolution_ + Vec2d(500, 500)).cast<int>();
+            // Vec2i pf = (pw * resolution_ + Vec2d(500, 500)).cast<int>();
+            Vec2d pf = (pw * resolution_ + Vec2d(500, 500)).cast<double>();
 
-            if (pf[0] >= image_boarder && pf[0] < field_.cols - image_boarder && pf[1] >= image_boarder &&
-                pf[1] < field_.rows - image_boarder) {
+            if (pf[0] >= image_boarder && pf[0] < field_.cols - image_boarder &&
+                pf[1] >= image_boarder && pf[1] < field_.rows - image_boarder) {
                 effective_num++;
 
                 // 图像梯度
-                float dx = 0.5 * (field_.at<float>(pf[1], pf[0] + 1) - field_.at<float>(pf[1], pf[0] - 1));
-                float dy = 0.5 * (field_.at<float>(pf[1] + 1, pf[0]) - field_.at<float>(pf[1] - 1, pf[0]));
+                // float dx =
+                //     0.5 * (field_.at<float>(pf[1], pf[0] + 1) - field_.at<float>(pf[1], pf[0] -
+                //     1));
+                // float dy =
+                //     0.5 * (field_.at<float>(pf[1] + 1, pf[0]) - field_.at<float>(pf[1] - 1,
+                //     pf[0]));
+                // 双线性插值
+                float dx = 0.5 * (math::GetPixelValue<float>(field_, pf[0] + 1, pf[1]) -
+                                  math::GetPixelValue<float>(field_, pf[0] - 1, pf[1]));
+                float dy = 0.5 * (math::GetPixelValue<float>(field_, pf[0], pf[1] + 1) -
+                                  math::GetPixelValue<float>(field_, pf[0], pf[1] - 1));
 
                 Vec3d J;
                 J << resolution_ * dx, resolution_ * dy,
-                    -resolution_ * dx * r * std::sin(angle + theta) + resolution_ * dy * r * std::cos(angle + theta);
+                    -resolution_ * dx * r * std::sin(angle + theta) +
+                        resolution_ * dy * r * std::cos(angle + theta);
                 H += J * J.transpose();
 
-                float e = field_.at<float>(pf[1], pf[0]);
+                // float e = field_.at<float>(pf[1], pf[0]);
+                float e = math::GetPixelValue<float>(field_, pf[0], pf[1]);
                 b += -J * e;
 
                 cost += e * e;
@@ -178,7 +196,8 @@ bool LikelihoodField::AlignG2O(SE2& init_pose) {
         }
 
         float angle = source_->angle_min + i * source_->angle_increment;
-        if (angle < source_->angle_min + 30 * M_PI / 180.0 || angle > source_->angle_max - 30 * M_PI / 180.0) {
+        if (angle < source_->angle_min + 30 * M_PI / 180.0 ||
+            angle > source_->angle_max - 30 * M_PI / 180.0) {
             continue;
         }
 
