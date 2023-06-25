@@ -25,6 +25,9 @@ namespace sad {
 void Visualize2DScan(Scan2d::Ptr scan, const SE2& pose, cv::Mat& image, const Vec3b& color, int image_size = 800,
                      float resolution = 20.0, const SE2& pose_submap = SE2());
 
+void DetectDegraded(Scan2d::Ptr scan, const SE2& pose, cv::Mat& image, const Vec3b& color, int image_size = 800,
+                     float resolution = 20.0, const SE2& pose_submap = SE2());
+
 }  // namespace sad
 
 #endif  // SLAM_IN_AUTO_DRIVING_LIDAR_2D_UTILS_H

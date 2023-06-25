@@ -84,7 +84,7 @@ bool Mapping2D::ProcessScan(Scan2d::Ptr scan) {
         cv::imshow("global map", ShowGlobalMap());
     }
 
-    cv::waitKey(10);
+    cv::waitKey(1);
 
     if (last_frame_) {
         motion_guess_ = last_frame_->pose_.inverse() * current_frame_->pose_;

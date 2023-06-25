@@ -30,6 +30,6 @@ int main(int argc, char** argv) {
     }
 
     rosbag_io.AddScan2DHandle("/pavo_scan_bottom", [&](Scan2d::Ptr scan) { return mapping.ProcessScan(scan); }).Go();
-    cv::imwrite("./data/ch6/global_map.png", mapping.ShowGlobalMap(2000));
+    cv::imwrite("./data/ch6/global_map.png", mapping.ShowGlobalMap(100));
     return 0;
 }

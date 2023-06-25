@@ -21,11 +21,12 @@ int main(int argc, char** argv) {
     sad::RosbagIO rosbag_io(fLS::FLAGS_bag_path);
     rosbag_io
         .AddScan2DHandle("/pavo_scan_bottom",
-                         [](Scan2d::Ptr scan) {
+                         [&](Scan2d::Ptr scan) {
                              cv::Mat image;
-                             sad::Visualize2DScan(scan, SE2(), image, Vec3b(255, 0, 0));
+                             sad::DetectDegraded(scan, SE2(), image, Vec3b(255, 0, 0));
                              cv::imshow("scan", image);
-                             cv::waitKey(20);
+                             int key = cv::waitKey(10);
+                             if (key == 32) cv::waitKey(0); // 空格暂停
                              return true;
                          })
         .Go();

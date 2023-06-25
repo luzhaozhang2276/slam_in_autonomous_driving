@@ -18,8 +18,8 @@ int main(int argc, char** argv) {
     FLAGS_colorlogtostderr = true;
     google::ParseCommandLineFlags(&argc, &argv, true);
 
-    LOG(INFO) << "testing plane fitting";
-    PlaneFittingTest();
+    // LOG(INFO) << "testing plane fitting";
+    // PlaneFittingTest();
 
     LOG(INFO) << "testing line fitting";
     LineFittingTest();
