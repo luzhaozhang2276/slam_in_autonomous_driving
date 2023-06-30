@@ -302,19 +302,8 @@ SE3 LoamLikeOdom::AlignWithLocalMap(CloudPtr edge, CloudPtr surf, CloudPtr groun
 
         for (const auto& idx : index_surf) {
             if (effect_surf[idx]) {
-                Eigen::Matrix<double, 1, 1> info = Eigen::Matrix<double, 1, 1>::Identity();
-                Eigen::Matrix<double, 1, 1> error_temp;
-                error_temp << errors_surf[idx];
-                double error = this->chi2(error_temp, info);
-                Vec3d rho;
-                this->robust_kernel_.Robustify(error, rho);
-                Eigen::Matrix<double, 1, 1> weightedOmega = this->RobustInformation(rho, error_temp, info);
-                H += jacob_surf[idx].transpose() * weightedOmega * jacob_surf[idx];
-                err += -jacob_surf[idx].transpose() * errors_surf[idx] * rho[1];
-
-                // H += jacob_surf[idx].transpose() * jacob_surf[idx];
-                // err += -jacob_surf[idx].transpose() * errors_surf[idx];
-
+                H += jacob_surf[idx].transpose() * jacob_surf[idx];
+                err += -jacob_surf[idx].transpose() * errors_surf[idx];
                 effective_num++;
                 total_res += errors_surf[idx] * errors_surf[idx];
             }
@@ -322,19 +311,8 @@ SE3 LoamLikeOdom::AlignWithLocalMap(CloudPtr edge, CloudPtr surf, CloudPtr groun
 
         for (const auto& idx : index_ground) {
             if (effect_ground[idx]) {
-                Eigen::Matrix<double, 1, 1> info = Eigen::Matrix<double, 1, 1>::Identity();
-                // info << 5.0;
-                Eigen::Matrix<double, 1, 1> error_temp;
-                error_temp << errors_ground[idx];
-                double error = this->chi2(error_temp, info);
-                Vec3d rho;
-                this->robust_kernel_.Robustify(error, rho);
-                Eigen::Matrix<double, 1, 1> weightedOmega = this->RobustInformation(rho, error_temp, info);
-                H += jacob_ground[idx].transpose() * weightedOmega * jacob_ground[idx];
-                err += -jacob_ground[idx].transpose() * errors_ground[idx] * rho[1];
-
-                // H += jacob_ground[idx].transpose() * jacob_ground[idx];
-                // err += -jacob_ground[idx].transpose() * errors_ground[idx];
+                H += jacob_ground[idx].transpose() * jacob_ground[idx];
+                err += -jacob_ground[idx].transpose() * errors_ground[idx];
                 effective_num++;
                 total_res += errors_ground[idx] * errors_ground[idx];
             }
@@ -342,17 +320,8 @@ SE3 LoamLikeOdom::AlignWithLocalMap(CloudPtr edge, CloudPtr surf, CloudPtr groun
 
         for (const auto& idx : index_edge) {
             if (effect_edge[idx]) {
-                Eigen::Matrix<double, 3, 3> info = Eigen::Matrix<double, 3, 3>::Identity();
-                Eigen::Matrix<double, 3, 1> error_temp = errors_edge[idx];
-                double error = this->chi2(error_temp, info);
-                Vec3d rho;
-                this->robust_kernel_.Robustify(error, rho);
-                Eigen::Matrix<double, 3, 3> weightedOmega = this->RobustInformation(rho, error_temp, info);
-                H += jacob_edge[idx].transpose() * weightedOmega * jacob_edge[idx];
-                err += -jacob_edge[idx].transpose() * errors_edge[idx] * rho[1];
-
-                // H += jacob_edge[idx].transpose() * jacob_edge[idx];
-                // err += -jacob_edge[idx].transpose() * errors_edge[idx];
+                H += jacob_edge[idx].transpose() * jacob_edge[idx];
+                err += -jacob_edge[idx].transpose() * errors_edge[idx];
                 effective_num++;
                 total_res += errors_edge[idx].norm();
             }

@@ -8,6 +8,7 @@
 #include "common/eigen_types.h"
 #include "common/g2o_types.h"
 #include "common/point_types.h"
+#include "robust_kernel.h"
 
 #include <list>
 namespace sad {
@@ -85,6 +86,15 @@ class IncNdt3d {
     /// 使用gauss-newton方法进行ndt配准
     bool AlignNdt(SE3& init_pose);
 
+    Mat3d RobustInformation(const Vec3d& rho, const Vec3d& err, const Mat3d& info) {
+        Mat3d result = rho[1] * info;
+        Vec3d weightedErrror = info * err;
+        result.noalias() += 2 * rho[2] * (weightedErrror * weightedErrror.transpose());
+        return result;
+    }
+
+    double chi2(const Vec3d& err, const Mat3d& info) const { return err.dot(info * err); }
+
     /**
      * 计算给定Pose下的雅可比和残差矩阵，符合IEKF中符号（8.17, 8.19）
      * @param pose
@@ -116,6 +126,7 @@ class IncNdt3d {
     std::vector<KeyType> nearby_grids_;                                                // 附近的栅格
 
     bool flag_first_scan_ = true;  // 首帧点云特殊处理
+    RobustKernelCauchy robust_kernel_;
 };
 
 }  // namespace sad

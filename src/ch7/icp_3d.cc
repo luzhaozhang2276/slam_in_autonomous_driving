@@ -68,15 +68,21 @@ bool Icp3d::AlignP2P(SE3& init_pose) {
         int effective_num = 0;
         auto H_and_err = std::accumulate(
             index.begin(), index.end(), std::pair<Mat6d, Vec6d>(Mat6d::Zero(), Vec6d::Zero()),
-            [&jacobians, &errors, &effect_pts, &total_res, &effective_num](const std::pair<Mat6d, Vec6d>& pre,
-                                                                           int idx) -> std::pair<Mat6d, Vec6d> {
+            [&jacobians, &errors, &effect_pts, &total_res, &effective_num, this](
+                const std::pair<Mat6d, Vec6d>& pre, int idx) -> std::pair<Mat6d, Vec6d> {
                 if (!effect_pts[idx]) {
                     return pre;
                 } else {
                     total_res += errors[idx].dot(errors[idx]);
                     effective_num++;
-                    return std::pair<Mat6d, Vec6d>(pre.first + jacobians[idx].transpose() * jacobians[idx],
-                                                   pre.second - jacobians[idx].transpose() * errors[idx]);
+                    Eigen::Matrix3d info = Eigen::Matrix3d::Identity();
+                    double error = this->chi2(errors[idx], info);
+                    Vec3d rho;
+                    this->robust_kernel_.Robustify(error, rho);
+                    Eigen::Matrix3d weightedOmega = this->RobustInformation(rho, errors[idx], info);
+                    return std::pair<Mat6d, Vec6d>(
+                        pre.first + jacobians[idx].transpose() * weightedOmega * jacobians[idx],
+                        pre.second - jacobians[idx].transpose() * rho[1] * errors[idx]);
                 }
             });
 
@@ -179,15 +185,23 @@ bool Icp3d::AlignP2Plane(SE3& init_pose) {
         int effective_num = 0;
         auto H_and_err = std::accumulate(
             index.begin(), index.end(), std::pair<Mat6d, Vec6d>(Mat6d::Zero(), Vec6d::Zero()),
-            [&jacobians, &errors, &effect_pts, &total_res, &effective_num](const std::pair<Mat6d, Vec6d>& pre,
-                                                                           int idx) -> std::pair<Mat6d, Vec6d> {
+            [&jacobians, &errors, &effect_pts, &total_res, &effective_num, this](
+                const std::pair<Mat6d, Vec6d>& pre, int idx) -> std::pair<Mat6d, Vec6d> {
                 if (!effect_pts[idx]) {
                     return pre;
                 } else {
                     total_res += errors[idx] * errors[idx];
                     effective_num++;
-                    return std::pair<Mat6d, Vec6d>(pre.first + jacobians[idx].transpose() * jacobians[idx],
-                                                   pre.second - jacobians[idx].transpose() * errors[idx]);
+                    Eigen::Matrix<double, 1, 1> info = Eigen::Matrix<double, 1, 1>::Identity();
+                    Eigen::Matrix<double, 1, 1> err;
+                    err << errors[idx];
+                    double error = this->chi2(err, info);
+                    Vec3d rho;
+                    this->robust_kernel_.Robustify(error, rho);
+                    Eigen::Matrix<double, 1, 1> weightedOmega = this->RobustInformation(rho, err, info);
+                    return std::pair<Mat6d, Vec6d>(
+                        pre.first + jacobians[idx].transpose() * weightedOmega * jacobians[idx],
+                        pre.second - jacobians[idx].transpose() * rho[1] * errors[idx]);
                 }
             });
 
@@ -296,15 +310,21 @@ bool Icp3d::AlignP2Line(SE3& init_pose) {
         int effective_num = 0;
         auto H_and_err = std::accumulate(
             index.begin(), index.end(), std::pair<Mat6d, Vec6d>(Mat6d::Zero(), Vec6d::Zero()),
-            [&jacobians, &errors, &effect_pts, &total_res, &effective_num](const std::pair<Mat6d, Vec6d>& pre,
-                                                                           int idx) -> std::pair<Mat6d, Vec6d> {
+            [&jacobians, &errors, &effect_pts, &total_res, &effective_num, this](
+                const std::pair<Mat6d, Vec6d>& pre, int idx) -> std::pair<Mat6d, Vec6d> {
                 if (!effect_pts[idx]) {
                     return pre;
                 } else {
                     total_res += errors[idx].dot(errors[idx]);
                     effective_num++;
-                    return std::pair<Mat6d, Vec6d>(pre.first + jacobians[idx].transpose() * jacobians[idx],
-                                                   pre.second - jacobians[idx].transpose() * errors[idx]);
+                    Eigen::Matrix3d info = Eigen::Matrix3d::Identity();
+                    double error = this->chi2(errors[idx], info);
+                    Vec3d rho;
+                    this->robust_kernel_.Robustify(error, rho);
+                    Eigen::Matrix3d weightedOmega = this->RobustInformation(rho, errors[idx], info);
+                    return std::pair<Mat6d, Vec6d>(
+                        pre.first + jacobians[idx].transpose() * weightedOmega * jacobians[idx],
+                        pre.second - jacobians[idx].transpose() * rho[1] * errors[idx]);
                 }
             });
 

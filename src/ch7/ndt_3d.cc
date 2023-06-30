@@ -150,9 +150,12 @@ bool Ndt3d::AlignNdt(SE3& init_pose) {
             total_res += errors[idx].transpose() * infos[idx] * errors[idx];
             // chi2.emplace_back(errors[idx].transpose() * infos[idx] * errors[idx]);
             effective_num++;
-
-            H += jacobians[idx].transpose() * infos[idx] * jacobians[idx];
-            err += -jacobians[idx].transpose() * infos[idx] * errors[idx];
+            double error = this->chi2(errors[idx], infos[idx]);
+            Vec3d rho;
+            this->robust_kernel_.Robustify(error, rho);
+            Eigen::Matrix3d weightedOmega = this->RobustInformation(rho, errors[idx], infos[idx]);
+            H += jacobians[idx].transpose() * weightedOmega * jacobians[idx];
+            err += -rho[1] * jacobians[idx].transpose() * infos[idx] * errors[idx];
         }
 
         if (effective_num < options_.min_effective_pts_) {

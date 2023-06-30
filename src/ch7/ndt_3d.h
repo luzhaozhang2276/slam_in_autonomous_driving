@@ -7,6 +7,7 @@
 
 #include "common/eigen_types.h"
 #include "common/point_types.h"
+#include "robust_kernel.h"
 
 namespace sad {
 
@@ -60,24 +61,37 @@ class Ndt3d {
         BuildVoxels();
 
         // 计算点云中心
-        target_center_ = std::accumulate(target->points.begin(), target_->points.end(), Vec3d::Zero().eval(),
-                                         [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
-                         target_->size();
+        target_center_ =
+            std::accumulate(
+                target->points.begin(), target_->points.end(), Vec3d::Zero().eval(),
+                [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
+            target_->size();
     }
 
     /// 设置被配准的Scan
     void SetSource(CloudPtr source) {
         source_ = source;
 
-        source_center_ = std::accumulate(source_->points.begin(), source_->points.end(), Vec3d::Zero().eval(),
-                                         [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
-                         source_->size();
+        source_center_ =
+            std::accumulate(
+                source_->points.begin(), source_->points.end(), Vec3d::Zero().eval(),
+                [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
+            source_->size();
     }
 
     void SetGtPose(const SE3& gt_pose) {
         gt_pose_ = gt_pose;
         gt_set_ = true;
     }
+
+    Mat3d RobustInformation(const Vec3d& rho, const Vec3d& err, const Mat3d& info) {
+        Mat3d result = rho[1] * info;
+        Vec3d weightedErrror = info * err;
+        result.noalias() += 2 * rho[2] * (weightedErrror * weightedErrror.transpose());
+        return result;
+    }
+
+    double chi2(const Vec3d& err, const Mat3d& info) const { return err.dot(info * err); }
 
     /// 使用gauss-newton方法进行ndt配准
     bool AlignNdt(SE3& init_pose);
@@ -101,6 +115,7 @@ class Ndt3d {
 
     std::unordered_map<KeyType, VoxelData, hash_vec<3>> grids_;  // 栅格数据
     std::vector<KeyType> nearby_grids_;                          // 附近的栅格
+    RobustKernelCauchy robust_kernel_;
 };
 
 }  // namespace sad

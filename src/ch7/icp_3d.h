@@ -6,6 +6,7 @@
 #define SLAM_IN_AUTO_DRIVING_ICP_3D_H
 
 #include "ch5/kdtree.h"
+#include "robust_kernel.h"
 
 namespace sad {
 
@@ -39,18 +40,22 @@ class Icp3d {
         BuildTargetKdTree();
 
         // 计算点云中心
-        target_center_ = std::accumulate(target->points.begin(), target_->points.end(), Vec3d::Zero().eval(),
-                                         [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
-                         target_->size();
+        target_center_ =
+            std::accumulate(
+                target->points.begin(), target_->points.end(), Vec3d::Zero().eval(),
+                [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
+            target_->size();
         LOG(INFO) << "target center: " << target_center_.transpose();
     }
 
     /// 设置被配准的Scan
     void SetSource(CloudPtr source) {
         source_ = source;
-        source_center_ = std::accumulate(source_->points.begin(), source_->points.end(), Vec3d::Zero().eval(),
-                                         [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
-                         source_->size();
+        source_center_ =
+            std::accumulate(
+                source_->points.begin(), source_->points.end(), Vec3d::Zero().eval(),
+                [](const Vec3d& c, const PointType& pt) -> Vec3d { return c + ToVec3d(pt); }) /
+            source_->size();
         LOG(INFO) << "source center: " << source_center_.transpose();
     }
 
@@ -58,6 +63,17 @@ class Icp3d {
         gt_pose_ = gt_pose;
         gt_set_ = true;
     }
+
+    template<int D>
+    Eigen::Matrix<double, D, D> RobustInformation(const Vec3d& rho, const Eigen::Matrix<double, D, 1>& err, const Eigen::Matrix<double, D, D>& info) {
+        Eigen::Matrix<double, D, D> result = rho[1] * info;
+        Eigen::Matrix<double, D, 1> weightedErrror = info * err;
+        result.noalias() += 2 * rho[2] * (weightedErrror * weightedErrror.transpose());
+        return result;
+    }
+
+    template<int D>
+    double chi2(const Eigen::Matrix<double, D, 1>& err, const Eigen::Matrix<double, D, D>& info) const { return err.dot(info * err); }
 
     /// 使用gauss-newton方法进行配准, 点到点
     bool AlignP2P(SE3& init_pose);
@@ -84,6 +100,7 @@ class Icp3d {
     SE3 gt_pose_;
 
     Options options_;
+    RobustKernelCauchy robust_kernel_;
 };
 
 }  // namespace sad
