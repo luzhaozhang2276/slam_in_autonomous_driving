@@ -35,6 +35,7 @@ int main(int argc, char** argv) {
         .Go();
 
     lo.SaveMap("./data/ch7/loam_map.pcd");
+    lo.SavePoseAsUTM("./data/ch7/pose.txt");
 
     sad::common::Timer::PrintAll();
     LOG(INFO) << "done.";

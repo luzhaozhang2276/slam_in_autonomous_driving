@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
         .AddVelodyneHandle(
             "/velodyne_packets_1",
             [&](sad::FullCloudPtr cloud) -> bool {
-                if (cnt > 1) return true;
+                if (cnt > 0) return true;
                 sad::CloudPtr pcd_corner(new sad::PointCloudType), pcd_surf(new sad::PointCloudType), pcd_ground(new sad::PointCloudType);
                 sad::common::Timer::Evaluate([&]() { feature_extraction.Extract(cloud, pcd_corner, pcd_surf, pcd_ground); },
                                              "Feature Extraction");

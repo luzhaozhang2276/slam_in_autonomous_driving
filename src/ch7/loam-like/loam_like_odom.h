@@ -7,6 +7,7 @@
 
 #include "ch5/kdtree.h"
 #include "ch7/icp_3d.h"
+#include "ch7/robust_kernel.h"
 #include "common/eigen_types.h"
 #include "common/point_types.h"
 #include "tools/pcl_map_viewer.h"
@@ -40,8 +41,9 @@ class LoamLikeOdom {
         int min_effective_pts_ = 10;        // 最近邻点数阈值
         double eps_ = 1e-3;                 // 收敛判定条件
 
-        bool use_edge_points_ = true;  // 是否使用边缘点
-        bool use_surf_points_ = true;  // 是否使用平面点
+        bool use_edge_points_ = true;    // 是否使用边缘点
+        bool use_surf_points_ = true;   // 是否使用平面点
+        bool use_ground_points_ = true;  // 是否使用地面点
     };
 
     explicit LoamLikeOdom(Options options = Options());
@@ -54,9 +56,25 @@ class LoamLikeOdom {
 
     void SaveMap(const std::string& path);
 
+    void SavePoseAsUTM(const std::string& path);
+
+    template <int D>
+    Eigen::Matrix<double, D, D> RobustInformation(const Vec3d& rho, const Eigen::Matrix<double, D, 1>& err,
+                                                  const Eigen::Matrix<double, D, D>& info) {
+        Eigen::Matrix<double, D, D> result = rho[1] * info;
+        Eigen::Matrix<double, D, 1> weightedErrror = info * err;
+        result.noalias() += 2 * rho[2] * (weightedErrror * weightedErrror.transpose());
+        return result;
+    }
+
+    template <int D>
+    double chi2(const Eigen::Matrix<double, D, 1>& err, const Eigen::Matrix<double, D, D>& info) const {
+        return err.dot(info * err);
+    }
+
    private:
     /// 与局部地图进行配准
-    SE3 AlignWithLocalMap(CloudPtr edge, CloudPtr surf);
+    SE3 AlignWithLocalMap(CloudPtr edge, CloudPtr surf, CloudPtr ground);
 
     /// 判定是否为关键帧
     bool IsKeyframe(const SE3& current_pose);
@@ -66,17 +84,19 @@ class LoamLikeOdom {
     int cnt_frame_ = 0;
     int last_kf_id_ = 0;
 
-    CloudPtr local_map_edge_ = nullptr, local_map_surf_ = nullptr;  // 局部地图的local map
-    std::vector<SE3> estimated_poses_;    // 所有估计出来的pose，用于记录轨迹和预测下一个帧
-    SE3 last_kf_pose_;                    // 上一关键帧的位姿
-    std::deque<CloudPtr> edges_, surfs_;  // 缓存的角点和平面点
+    CloudPtr local_map_edge_ = nullptr, local_map_surf_ = nullptr, local_map_ground_ = nullptr;  // 局部地图的local map
+    std::vector<SE3> estimated_poses_;  // 所有估计出来的pose，用于记录轨迹和预测下一个帧
+    SE3 last_kf_pose_;                  // 上一关键帧的位姿
+    std::deque<CloudPtr> edges_, surfs_, grounds_;  // 缓存的角点和平面点
 
     CloudPtr global_map_ = nullptr;  // 用于保存的全局地图
 
     std::shared_ptr<FeatureExtraction> feature_extraction_ = nullptr;
 
     std::shared_ptr<PCLMapViewer> viewer_ = nullptr;
-    KdTree kdtree_edge_, kdtree_surf_;
+    KdTree kdtree_edge_, kdtree_surf_, kdtree_ground_;
+
+    RobustKernelCauchy robust_kernel_;  // robust kernel for icp
 };
 
 }  // namespace sad

@@ -47,6 +47,7 @@ bin
 data/ch6/frame*.txt
 data/ch6/*.png
 data/ch7/**.pcd
+data/ch7
 **DS_Store
 
 data/ch9/**.pcd
