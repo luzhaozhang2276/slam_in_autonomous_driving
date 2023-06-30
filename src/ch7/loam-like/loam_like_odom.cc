@@ -26,7 +26,7 @@ void LoamLikeOdom::ProcessPointCloud(FullCloudPtr cloud) {
     LOG(INFO) << "processing frame " << cnt_frame_++;
     // step 1. 提特征
     CloudPtr current_edge(new PointCloudType), current_surf(new PointCloudType);
-    feature_extraction_->Extract(cloud, current_edge, current_surf);
+    feature_extraction_->Extract(cloud, current_edge, current_surf, current_surf);
 
     if (current_edge->size() < options_.min_edge_pts_ || current_surf->size() < options_.min_surf_pts_) {
         LOG(ERROR) << "not enough edge/surf pts: " << current_edge->size() << "," << current_surf->size();

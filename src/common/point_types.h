@@ -52,9 +52,9 @@ struct FullPointType {
     PCL_ADD_POINT4D;
     float range = 0;
     float radius = 0;
-    uint8_t intensity = 0;
-    uint8_t ring = 0;
-    uint8_t angle = 0;
+    uint16_t intensity = 0;
+    uint16_t ring = 0;
+    uint16_t angle = 0;
     double time = 0;
     float height = 0;
 
@@ -78,8 +78,8 @@ using UiCloudPtr = UiPointCloudType::Ptr;
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(sad::FullPointType,
                                   (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, radius, radius)(
-                                      std::uint8_t, intensity, intensity)(std::uint16_t, angle, angle)(
-                                      std::uint8_t, ring, ring)(double, time, time)(float, height, height))
+                                      std::uint16_t, intensity, intensity)(std::uint16_t, angle, angle)(
+                                      std::uint16_t, ring, ring)(double, time, time)(float, height, height))
 
 namespace velodyne_ros {
 struct EIGEN_ALIGN16 Point {

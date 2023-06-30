@@ -8,11 +8,11 @@
 #include "ch7/loam-like/feature_extraction.h"
 #include "common/io_utils.h"
 
-#include "common/timer/timer.h"
 #include "common/point_cloud_utils.h"
+#include "common/timer/timer.h"
 
 /// 这里需要vlp16的数据，用wxb的
-DEFINE_string(bag_path, "./dataset/sad/wxb/test1.bag", "path to wxb bag");
+DEFINE_string(bag_path, "./dataset/sad/wxb/test2.bag", "path to wxb bag");
 
 int main(int argc, char** argv) {
     google::InitGoogleLogging(argv[0]);
@@ -25,20 +25,27 @@ int main(int argc, char** argv) {
 
     system("rm -rf ./data/ch7/*.pcd");
 
+    int cnt = 0;
     sad::RosbagIO bag_io(fLS::FLAGS_bag_path);
     bag_io
-        .AddVelodyneHandle("/velodyne_packets_1",
-                           [&](sad::FullCloudPtr cloud) -> bool {
-                               sad::CloudPtr pcd_corner(new sad::PointCloudType), pcd_surf(new sad::PointCloudType);
-                               sad::common::Timer::Evaluate(
-                                   [&]() { feature_extraction.Extract(cloud, pcd_corner, pcd_surf); },
-                                   "Feature Extraction");
-                               LOG(INFO) << "original pts:" << cloud->size() << ", corners: " << pcd_corner->size()
-                                         << ", surf: " << pcd_surf->size();
-                               sad::SaveCloudToFile("./data/ch7/corner.pcd", *pcd_corner);
-                               sad::SaveCloudToFile("./data/ch7/surf.pcd", *pcd_surf);
-                               return true;
-                           })
+        .AddVelodyneHandle(
+            "/velodyne_packets_1",
+            [&](sad::FullCloudPtr cloud) -> bool {
+                if (cnt > 1) return true;
+                sad::CloudPtr pcd_corner(new sad::PointCloudType), pcd_surf(new sad::PointCloudType), pcd_ground(new sad::PointCloudType);
+                sad::common::Timer::Evaluate([&]() { feature_extraction.Extract(cloud, pcd_corner, pcd_surf, pcd_ground); },
+                                             "Feature Extraction");
+                LOG(INFO) << "id: " << cnt++ << ", original pts:" << cloud->size()
+                          << ", corners: " << pcd_corner->size() << ", surf: " << pcd_surf->size() << ", ground: " << pcd_ground->size();
+                // sad::SaveCloudToFile("./data/ch7/feature/src/" + std::to_string(cnt) + ".pcd", *cloud);
+                // sad::SaveCloudToFile("./data/ch7/feature/corner/" + std::to_string(cnt) + ".pcd", *pcd_corner);
+                // sad::SaveCloudToFile("./data/ch7/feature/surf/" + std::to_string(cnt) + ".pcd", *pcd_surf);
+
+                sad::SaveCloudToFile("./data/ch7/src.pcd", *cloud);
+                sad::SaveCloudToFile("./data/ch7/corner.pcd", *pcd_corner);
+                sad::SaveCloudToFile("./data/ch7/surf.pcd", *pcd_surf);
+                return true;
+            })
         .Go();
 
     sad::common::Timer::PrintAll();

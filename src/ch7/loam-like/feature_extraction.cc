@@ -3,25 +3,34 @@
 //
 #include "ch7/loam-like/feature_extraction.h"
 #include <glog/logging.h>
+#include "ch5/kdtree.h"
 
 namespace sad {
 
-void FeatureExtraction::Extract(FullCloudPtr pc_in, CloudPtr pc_out_edge, CloudPtr pc_out_surf) {
+void FeatureExtraction::Extract(FullCloudPtr pc_in, CloudPtr pc_out_edge, CloudPtr pc_out_surf,
+                                CloudPtr pc_out_ground) {
     int num_scans = 16;
-    std::vector<CloudPtr> scans_in_each_line;  // 分线数的点云
+    int num_ground_scans = 7;
+    std::vector<CloudPtr> scans_in_each_line;  // 分线束的点云 共16个线束
+    std::vector<pcl::PointIndices::Ptr> scans_indices;
     for (int i = 0; i < num_scans; i++) {
         scans_in_each_line.emplace_back(new PointCloudType);
+        scans_indices.emplace_back(new pcl::PointIndices);
     }
 
-    for (auto &pt : pc_in->points) {
+    long int idx = 0;
+    for (auto &pt : pc_in->points) {  // 遍历输入点云，按照线束保存到vector中
         assert(pt.ring >= 0 && pt.ring < num_scans);
         PointType p;
         p.x = pt.x;
         p.y = pt.y;
         p.z = pt.z;
-        p.intensity = pt.intensity;
+        // p.intensity = pt.intensity;
+        p.intensity = 0;
 
         scans_in_each_line[pt.ring]->points.emplace_back(p);
+        scans_indices[pt.ring]->indices.push_back(idx);
+        idx++;
     }
 
     // 处理曲率
@@ -68,13 +77,27 @@ void FeatureExtraction::Extract(FullCloudPtr pc_in, CloudPtr pc_out_edge, CloudP
             std::vector<IdAndValue> sub_cloud_curvature(cloud_curvature.begin() + sector_start,
                                                         cloud_curvature.begin() + sector_end);
 
-            ExtractFromSector(scans_in_each_line[i], sub_cloud_curvature, pc_out_edge, pc_out_surf);
+            if (i < num_ground_scans)
+                ExtractFromSector(scans_in_each_line[i], scans_in_each_line[i + 1], sub_cloud_curvature, pc_out_edge,
+                                  pc_out_surf, pc_out_ground, true);
+            else
+                ExtractFromSector(scans_in_each_line[i], scans_in_each_line[i], sub_cloud_curvature, pc_out_edge,
+                                  pc_out_surf, pc_out_ground, false);
+        }
+    }
+
+    // 更新原始点云类别输出 (intensity 保存特征类别信息[0:none, 1:edge, 2:surface])
+    for (int i = 0; i < num_scans; i++) {
+        for (int j = 0; j < scans_in_each_line[i]->size(); j++) {
+            auto idx = scans_indices[i]->indices[j];
+            pc_in->points[idx].intensity = scans_in_each_line[i]->points[j].intensity;
         }
     }
 }
 
-void FeatureExtraction::ExtractFromSector(const CloudPtr &pc_in, std::vector<IdAndValue> &cloud_curvature,
-                                          CloudPtr &pc_out_edge, CloudPtr &pc_out_surf) {
+void FeatureExtraction::ExtractFromSector(const CloudPtr &pc_in, const CloudPtr &pc_up,
+                                          std::vector<IdAndValue> &cloud_curvature, CloudPtr &pc_out_edge,
+                                          CloudPtr &pc_out_surf, CloudPtr &pc_out_ground, bool b_detect_ground) {
     // 按曲率排序
     std::sort(cloud_curvature.begin(), cloud_curvature.end(),
               [](const IdAndValue &a, const IdAndValue &b) { return a.value_ < b.value_; });
@@ -122,11 +145,64 @@ void FeatureExtraction::ExtractFromSector(const CloudPtr &pc_in, std::vector<IdA
         }
     }
 
-    /// 选取曲率较小的平面点
+    /// 地面点检测与提取
+    std::vector<int> ground_points;     // 被选中的地面点
+    std::vector<int> candidate_points;  // 候选地面点
+    float diffX, diffY, diffZ, angle;
+    if (b_detect_ground) {
+        // 构建临近线束点云的kdtree
+        KdTree tree;
+        tree.SetEnableANN();
+        tree.BuildTree(pc_up);
+
+        // 计算地面的平均距离(可先计算最小距离)
+        float min_z = 1000;
+        for (const auto &p : cloud_curvature) {
+            float z = pc_in->points[p.id_].z;
+            min_z = (z < min_z) ? z : min_z;
+        }
+
+        for (const auto &p : cloud_curvature) {
+            float z = pc_in->points[p.id_].z;
+            if (z < min_z + 1.0) candidate_points.push_back(p.id_);  // 0.2 0.5
+        }
+
+        // 遍历候选地面点
+        for (const auto &idx : candidate_points) {
+            Vec3d pos = ToVec3d(pc_in->points[idx]);
+            auto lower_point = pc_in->points[idx];
+
+            // 检查最近邻
+            std::vector<int> nn_indices;
+            tree.GetClosestPoint(ToPointType(pos), nn_indices, 5);
+            if (nn_indices.empty()) continue;
+
+            auto upper_point = pc_up->points[nn_indices[0]];
+
+            // 获取两点lowerInd和upperInd的xyz方向的差值
+            diffX = upper_point.x - lower_point.x;
+            diffY = upper_point.y - lower_point.y;
+            diffZ = upper_point.z - lower_point.z;
+
+            // 计算两点lowerInd和upperInd垂直高度diffZ和水平距离的夹角
+            angle = atan2(diffZ, sqrt(diffX * diffX + diffY * diffY)) * 180 / M_PI;
+
+            // 若夹角小于5,则认为该点为地面点
+            if (abs(angle) <= 5) ground_points.push_back(idx);
+        }
+    }
+
+    /// 选取曲率较小的平面点 (保存曲率大的点为角点,其余点均为面点)
     for (int i = 0; i <= (int)cloud_curvature.size() - 1; i++) {
         int ind = cloud_curvature[i].id_;
-        if (std::find(picked_points.begin(), picked_points.end(), ind) == picked_points.end()) {
+        if (std::find(picked_points.begin(), picked_points.end(), ind) != picked_points.end())
+            pc_in->points[ind].intensity = 1;
+        else if (std::find(ground_points.begin(), ground_points.end(), ind) != ground_points.end()) {
+            pc_in->points[ind].intensity = 3;
+            pc_out_ground->push_back(pc_in->points[ind]);
+        } else {
             pc_out_surf->push_back(pc_in->points[ind]);
+            pc_in->points[ind].intensity = 2;
         }
     }
 }
