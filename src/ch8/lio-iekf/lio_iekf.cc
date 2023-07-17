@@ -13,8 +13,8 @@
 #include "common/g2o_types.h"
 
 #include "common/lidar_utils.h"
-#include "common/timer/timer.h"
 #include "common/point_cloud_utils.h"
+#include "common/timer/timer.h"
 
 #include "lio_iekf.h"
 
@@ -57,7 +57,8 @@ void LioIEKF::ProcessMeasurements(const MeasureGroup &meas) {
     Undistort();
 
     // 配准
-    Align();
+    // Align();
+    AlignIcpInc();
 }
 
 bool LioIEKF::LoadFromYAML(const std::string &yaml_file) {
@@ -83,7 +84,7 @@ void LioIEKF::Align() {
 
     current_scan_ = ConvertToCloud<FullPointType>(scan_undistort_);
 
-    // voxel 之
+    // voxel 点云降采样
     pcl::VoxelGrid<PointType> voxel;
     voxel.setLeafSize(0.5, 0.5, 0.5);
     voxel.setInputCloud(current_scan_);
@@ -95,8 +96,61 @@ void LioIEKF::Align() {
     if (flg_first_scan_) {
         ndt_.AddCloud(current_scan_);
         flg_first_scan_ = false;
+        return;
+    }
 
-        // nav_state_prior_ = std::make_shared<PriorNavState>(last_nav_state_, Mat15d::Identity() * 1e4);
+    // 后续的scan，使用NDT配合pose进行更新
+    LOG(INFO) << "=== frame " << frame_num_;
+
+    ndt_.SetSource(current_scan_filter);
+    ieskf_.UpdateUsingCustomObserve([this](const SE3 &input_pose, Mat18d &HTVH, Vec18d &HTVr) {
+        ndt_.ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
+    });
+
+    auto current_nav_state = ieskf_.GetNominalState();
+
+    // 若运动了一定范围，则把点云放入地图中
+    SE3 current_pose = ieskf_.GetNominalSE3();
+    SE3 delta_pose = last_pose_.inverse() * current_pose;
+
+    if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > math::deg2rad(10.0)) {
+        // 将地图合入NDT中
+        CloudPtr current_scan_world(new PointCloudType);
+        pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
+        ndt_.AddCloud(current_scan_world);
+        last_pose_ = current_pose;
+    }
+
+    // 放入UI
+    if (ui_) {
+        ui_->UpdateScan(current_scan_, current_nav_state.GetSE3());  // 转成Lidar Pose传给UI
+        ui_->UpdateNavState(current_nav_state);
+    }
+
+    frame_num_++;
+    std::cout << "-------------------------------------\n";
+    return;
+}
+
+void LioIEKF::AlignIcpInc() {
+    // 获取当前观测的点云(已进行去畸变处理)
+    FullCloudPtr scan_undistort_trans(new FullPointCloudType);
+    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, TIL_.matrix().cast<float>());
+    scan_undistort_ = scan_undistort_trans;
+    current_scan_ = ConvertToCloud<FullPointType>(scan_undistort_);  // 当前帧点云
+
+    // voxel 点云降采样
+    pcl::VoxelGrid<PointType> voxel;
+    voxel.setLeafSize(0.5, 0.5, 0.5);
+    voxel.setInputCloud(current_scan_);
+    CloudPtr current_scan_filter(new PointCloudType);  // 降采样后的点云
+    voxel.filter(*current_scan_filter);
+
+    /// the first scan
+    if (flg_first_scan_) {
+        icp_.SetTarget(current_scan_);
+        // ndt_.AddCloud(current_scan_);
+        flg_first_scan_ = false;
         return;
     }
 
@@ -104,9 +158,11 @@ void LioIEKF::Align() {
     LOG(INFO) << "=== frame " << frame_num_;
     // pred_nav_state_ = ieskf_.GetNominalState();
 
-    ndt_.SetSource(current_scan_filter);
+    icp_.SetSource(current_scan_filter);
+    // ndt_.SetSource(current_scan_filter);
     ieskf_.UpdateUsingCustomObserve([this](const SE3 &input_pose, Mat18d &HTVH, Vec18d &HTVr) {
-        ndt_.ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
+        icp_.ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
+        // ndt_.ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
     });
 
     auto current_nav_state = ieskf_.GetNominalState();
@@ -118,11 +174,12 @@ void LioIEKF::Align() {
     SE3 current_pose = ieskf_.GetNominalSE3();
     SE3 delta_pose = last_pose_.inverse() * current_pose;
 
-    if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > math::deg2rad(10.0)) {
+    if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > math::deg2rad(5.0)) {
         // 将地图合入NDT中
         CloudPtr current_scan_world(new PointCloudType);
         pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
-        ndt_.AddCloud(current_scan_world);
+        icp_.SetTarget(current_scan_world);
+        // ndt_.AddCloud(current_scan_world);
         last_pose_ = current_pose;
     }
 

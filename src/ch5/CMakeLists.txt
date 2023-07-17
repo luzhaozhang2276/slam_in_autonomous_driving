@@ -28,7 +28,6 @@ add_library(${PROJECT_NAME}.ch5
         ikd_Tree.cpp
         )
 target_link_libraries(${PROJECT_NAME}.ch5
-        ${PCL_LIBRARIES}
         tbb
         )
 

@@ -401,7 +401,16 @@ void KD_TREE<PointType>::Nearest_Search(PointType point, int k_nearest, PointVec
 }
 
 template <typename PointType>
-bool KD_TREE<PointType>::GetClosestPointMT(const PointVector &cloud, std::vector<std::pair<size_t, size_t>> &matches, int k) {
+bool KD_TREE<PointType>::GetClosestPoint(const PointType &pt, PointVector &Nearest_Points, int k) {
+    std::vector<float> k_sqr_distances;
+    Nearest_Search(pt, k, Nearest_Points, k_sqr_distances);
+    if (Nearest_Points.size() < k) return false;
+    return true;
+}
+
+template <typename PointType>
+bool KD_TREE<PointType>::GetClosestPointMT(const PointVector &cloud, std::vector<std::pair<size_t, size_t>> &matches,
+                                           int k) {
     matches.resize(cloud.size() * k);
 
     // 索引
@@ -424,7 +433,6 @@ bool KD_TREE<PointType>::GetClosestPointMT(const PointVector &cloud, std::vector
         }
     });
 
-    return true;
     return true;
 }
 

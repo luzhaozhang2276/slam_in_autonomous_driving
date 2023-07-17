@@ -1,5 +1,6 @@
 add_library(${PROJECT_NAME}.ch7
         icp_3d.cc
+        icp_inc.cc
         ndt_3d.cc
         gen_simu_data.cc
         direct_ndt_lo.cc

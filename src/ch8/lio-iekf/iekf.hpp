@@ -9,6 +9,7 @@
 #include "common/imu.h"
 #include "common/math_utils.h"
 #include "common/nav_state.h"
+#include <iostream>
 
 namespace sad {
 
@@ -248,7 +249,10 @@ bool IESKF<S>::UpdateUsingCustomObserve(IESKF::CustomObsFunc obs) {
 
     // update P
     cov_ = (Mat18T::Identity() - Qk * HTVH) * Pk;
-
+    Mat18d covd = cov_;
+    std::cout << "P\n";
+    std::cout << covd.block<9, 9>(0, 0).inverse();
+    std::cout << std::endl;
     // project P
     Mat18T J = Mat18T::Identity();
     Vec3d dtheta = (start_R.inverse() * R_).log();

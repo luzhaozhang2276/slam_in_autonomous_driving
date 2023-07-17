@@ -10,6 +10,7 @@
 #include "ch7/loosely_coupled_lio/cloud_convert.h"
 #include "ch7/loosely_coupled_lio/measure_sync.h"
 #include "ch7/ndt_inc.h"
+#include "ch7/icp_inc.h"
 #include "ch8/lio-iekf/iekf.hpp"
 
 #include "tools/ui/pangolin_window.h"
@@ -67,6 +68,8 @@ class LioIEKF {
     /// 执行一次配准和观测
     void Align();
 
+    void AlignIcpInc();
+
     /// modules
     std::shared_ptr<MessageSync> sync_ = nullptr;
     StaticIMUInit imu_init_;
@@ -77,6 +80,7 @@ class LioIEKF {
 
     /// NDT数据
     IncNdt3d ndt_;
+    IncIcp3d icp_;
     SE3 last_pose_;
 
     // flags
